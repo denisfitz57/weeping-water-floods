@@ -11,7 +11,7 @@ window.SITE_CONFIG = {
   memories: {
     formAction: "",
     fields: { chapter: "", name: "", memory: "", email: "" },
-    publishedCsv: ""
+    publishedCsv: "https://docs.google.com/spreadsheets/d/e/2PACX-1vThzSHK200O87sTLepdF98WrwgaV0IQLCf-uqaPe3OL9Dc1B-uFDtXEq9MMW-AIDtACP7ZhVS_VDy0i/pub?gid=1243012161&single=true&output=csv"
   },
 
   // Optional: where readers can send scans, photos or corrections privately.
