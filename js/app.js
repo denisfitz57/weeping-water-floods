@@ -87,34 +87,83 @@
     if (b && (e.key === "ArrowLeft" ? b.textContent.includes("Prev") : b.textContent.includes("Next"))) b.click();
   });
 
-  // ---------- comments (Cusdis; readers need no account) ----------
+  // ---------- reader memories (Google Form in, approved rows of a published sheet out) ----------
+  const MEM = CFG.memories || {};
+  const memOn = !!(MEM.formAction && MEM.fields && MEM.fields.chapter && MEM.fields.memory);
   const cm = $("#comments");
   $$("[data-discuss]").forEach((btn) => btn.addEventListener("click", () => openComments(btn.dataset.discuss, btn.dataset.title)));
   function openComments(id, title) {
     $("#cmTitle").textContent = title || "Share a memory";
     const box = $("#cmBody");
-    if (!CFG.cusdisAppId) {
-      box.innerHTML = `<p>Reader comments are not switched on yet. The site owner turns them on by adding a free Cusdis app ID in <code>js/config.js</code>; after that, anyone can leave a memory here without creating an account.</p>
-        ${CFG.contactEmail ? `<p>Meanwhile, send memories, photos or corrections to <a href="mailto:${esc(CFG.contactEmail)}?subject=${encodeURIComponent("Weeping Water floods: " + (title || ""))}">${esc(CFG.contactEmail)}</a>.</p>` : ""}`;
+    const mail = CFG.contactEmail ? `<p>Have photos or scans? Send them to <a href="mailto:${esc(CFG.contactEmail)}?subject=${encodeURIComponent("Weeping Water floods: " + (title || ""))}">${esc(CFG.contactEmail)}</a>.</p>` : "";
+    if (!memOn) {
+      box.innerHTML = `<p>Sharing memories isn't switched on yet. Once the site owner connects a Google Form, anyone will be able to leave a memory here without creating an account.</p>${mail}`;
     } else {
-      box.innerHTML = `<p>Remember this flood, or know more about it? Leave a note below. No account needed; comments appear after the site owner approves them.</p>
-        <div id="cusdis_thread" data-host="${esc(CFG.cusdisHost)}" data-app-id="${esc(CFG.cusdisAppId)}"
-          data-page-id="${esc(id)}" data-page-url="${esc(location.origin + location.pathname + "#" + id)}" data-page-title="${esc(title || id)}" data-theme="auto"></div>`;
-      loadCusdis().then(() => window.CUSDIS && window.CUSDIS.initial && window.CUSDIS.initial());
+      box.innerHTML = `<p>Remember this flood, or know more about it? No account is needed. Your note appears on the page once the site owner has read it.</p>
+        <form class="mem-form" novalidate>
+          <label>Your memory<textarea name="memory" rows="6" required maxlength="5000" placeholder="What happened, when, and who was there?"></textarea></label>
+          <label>Your name, as you'd like it shown <small>(optional)</small><input name="name" maxlength="100" autocomplete="name"></label>
+          <label>Email, if we may contact you <small>(optional, never shown)</small><input name="email" type="email" maxlength="200" autocomplete="email"></label>
+          <label class="hp" aria-hidden="true">Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label>
+          <div class="mem-actions"><button class="btn" type="submit">Send memory</button><span class="mem-status" role="status"></span></div>
+        </form>${mail}`;
+      const f = $("form", box);
+      f.addEventListener("submit", (e) => { e.preventDefault(); sendMemory(f, id); });
     }
     cm.showModal();
   }
-  let cusdisP;
-  function loadCusdis() {
-    if (!cusdisP) cusdisP = new Promise((res) => {
-      const s = document.createElement("script");
-      s.src = CFG.cusdisHost.replace(/\/$/, "") + "/js/cusdis.es.js"; s.async = true; s.defer = true;
-      s.onload = res; s.onerror = res; document.head.appendChild(s);
-    });
-    return cusdisP;
+  function sendMemory(f, chapter) {
+    const st = $(".mem-status", f), memory = f.memory.value.trim();
+    if (memory.length < 3) { st.textContent = "Please write a few words first."; f.memory.focus(); return; }
+    if (f.website.value) { st.textContent = "Thank you!"; return; }   // honeypot: bots fill every field
+    const body = new URLSearchParams();
+    body.append(MEM.fields.chapter, chapter);
+    body.append(MEM.fields.memory, memory);
+    if (MEM.fields.name) body.append(MEM.fields.name, f.name.value.trim());
+    if (MEM.fields.email) body.append(MEM.fields.email, f.email.value.trim());
+    const btn = $("button[type=submit]", f); btn.disabled = true; st.textContent = "Sending…";
+    // Google Forms sends no CORS headers, so the reply is opaque; a network error is the only failure we can see
+    fetch(MEM.formAction, { method: "POST", mode: "no-cors", body })
+      .then(() => { f.outerHTML = `<p class="mem-thanks"><b>Thank you.</b> Your memory was sent and will appear here once it has been read.</p>`; })
+      .catch(() => { btn.disabled = false; st.textContent = "That didn't go through. Please check your connection and try again."; });
   }
   $("#cmClose").addEventListener("click", () => cm.close());
   cm.addEventListener("click", (e) => { if (e.target === cm) cm.close(); });
+
+  // approved memories, shown under each chapter's button
+  if (MEM.publishedCsv) {
+    fetch(MEM.publishedCsv).then((r) => (r.ok ? r.text() : "")).then((txt) => {
+      const rows = parseCsv(txt);
+      if (rows.length < 2) return;
+      const head = rows[0].map((h) => h.trim().toLowerCase());
+      const col = (re) => head.findIndex((h) => re.test(h));
+      const iT = col(/time|date/), iC = col(/chapter/), iN = col(/name/), iM = col(/memory|comment/);
+      if (iC < 0 || iM < 0) return;
+      const by = {};
+      rows.slice(1).forEach((r) => { if (r[iM] && r[iM].trim()) (by[r[iC].trim()] = by[r[iC].trim()] || []).push(r); });
+      $$("[data-memories]").forEach((box) => {
+        const list = by[box.dataset.memories]; if (!list) return;
+        box.innerHTML = `<h4>Readers remember</h4>` + list.map((r) => {
+          const when = iT >= 0 && r[iT] ? new Date(r[iT]) : null;
+          const date = when && !isNaN(when) ? when.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "";
+          return `<blockquote class="memory"><p>${esc(r[iM].trim())}</p><footer>${esc((iN >= 0 && r[iN].trim()) || "A reader")}${date ? " · " + date : ""}</footer></blockquote>`;
+        }).join("");
+      });
+    }).catch(() => {});
+  }
+  function parseCsv(t) {
+    const out = []; let row = [], f = "", q = false;
+    for (let i = 0; i < t.length; i++) {
+      const ch = t[i];
+      if (q) { if (ch === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ",") { row.push(f); f = ""; }
+      else if (ch === "\n" || ch === "\r") { if (ch === "\r" && t[i + 1] === "\n") i++; row.push(f); out.push(row); row = []; f = ""; }
+      else f += ch;
+    }
+    if (f || row.length) { row.push(f); out.push(row); }
+    return out;
+  }
 
   // ---------- active chapter in the nav ----------
   const navLinks = $$(".toc a");

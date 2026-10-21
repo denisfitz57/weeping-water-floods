@@ -1,13 +1,19 @@
 // Site settings you may want to change.
 window.SITE_CONFIG = {
-  // Reader comments use Cusdis (https://cusdis.com): free, open source, no account
-  // needed to comment (a name is optional), and every comment waits for your approval.
-  // 1. Sign up at cusdis.com with your own email (only you, the site owner, need an account).
-  // 2. Add a website, copy its "App ID", and paste it below.
-  // Leave it empty and the "Add a memory" buttons explain that comments are coming soon.
-  cusdisAppId: "",
-  cusdisHost: "https://cusdis.com",
+  // Reader memories ("Add a memory" buttons) go to a Google Form you own. Readers need
+  // no account. Submissions land in the form's response spreadsheet, and only rows you
+  // mark "yes" in the Approved column appear on the site. Setup steps are in README.md.
+  //
+  // formAction:   the form's address, ending in /formResponse
+  // fields:       the entry.NNNN number of each question (from the form's "Get pre-filled link")
+  // publishedCsv: the "Publish to web" CSV link of the sheet tab that lists approved memories
+  // Leave formAction empty and the buttons explain that memories are coming soon.
+  memories: {
+    formAction: "",
+    fields: { chapter: "", name: "", memory: "", email: "" },
+    publishedCsv: ""
+  },
 
-  // Where readers can send scans, photos or corrections privately.
+  // Optional: where readers can send scans, photos or corrections privately.
   contactEmail: ""
 };
